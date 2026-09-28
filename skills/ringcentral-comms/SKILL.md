@@ -23,6 +23,17 @@ Official API documentation: https://developers.ringcentral.com/
 
 Requires SMS-capable phone numbers on the extension. Use `list_phone_numbers` to find valid `from` numbers.
 
+## RingOut defaults
+
+RingOut dials `from` first, then bridges to `to`. Prefer a reachable PSTN phone (cell) for `from` — RingCentral Direct Numbers often fail with `callerStatus: GenericError` when used as the first leg.
+
+When `from` or `callerId` are omitted, the server uses:
+
+- `RINGCENTRAL_RINGOUT_FROM` — default first-leg number
+- `RINGCENTRAL_RINGOUT_CALLER_ID` — default caller ID shown to the destination
+
+Always confirm before placing a live RingOut unless the user already asked for that specific call.
+
 ### Calls — history, active monitoring, outbound RingOut
 
 | Task | Tool |

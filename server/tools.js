@@ -214,21 +214,44 @@ export const tools = [
     inputSchema: {
       type: "object",
       properties: {
-        from: { type: "string", description: "Your phone number in E.164 (RingOut calls this number first)" },
+        from: {
+          type: "string",
+          description:
+            "Your phone number in E.164 (RingOut calls this number first). Defaults to RINGCENTRAL_RINGOUT_FROM when omitted.",
+        },
         to: { type: "string", description: "Destination phone number in E.164" },
-        callerId: { type: "string", description: "Optional caller ID shown to recipient" },
+        callerId: {
+          type: "string",
+          description:
+            "Optional caller ID shown to recipient. Defaults to RINGCENTRAL_RINGOUT_CALLER_ID when omitted.",
+        },
       },
-      required: ["from", "to"],
+      required: ["to"],
     },
     handler: async (args) => {
+      const from =
+        (args.from && String(args.from).trim()) ||
+        (process.env.RINGCENTRAL_RINGOUT_FROM || "").trim();
+      if (!from) {
+        throw {
+          error: {
+            code: "MISSING_FROM",
+            message:
+              "from is required (or set RINGCENTRAL_RINGOUT_FROM for the default first leg)",
+          },
+        };
+      }
+      const callerId =
+        (args.callerId && String(args.callerId).trim()) ||
+        (process.env.RINGCENTRAL_RINGOUT_CALLER_ID || "").trim();
       /** @type {Record<string, unknown>} */
       const body = {
-        from: { phoneNumber: String(args.from) },
+        from: { phoneNumber: from },
         to: { phoneNumber: String(args.to) },
         playPrompt: false,
       };
-      if (args.callerId) {
-        body.callerId = { phoneNumber: String(args.callerId) };
+      if (callerId) {
+        body.callerId = { phoneNumber: callerId };
       }
       const result = /** @type {Record<string, unknown>} */ (
         await rcPost("/restapi/v1.0/account/~/extension/~/ring-out", body)

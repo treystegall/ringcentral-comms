@@ -1,4 +1,17 @@
-import { SDK } from "@ringcentral/sdk";
+import { SDK, setDefaultExternals } from "@ringcentral/sdk";
+import DomStorage from "dom-storage";
+
+/**
+ * Prefer Node's built-in fetch. The SDK's bundled node-fetch@2 hits
+ * ERR_STREAM_PREMATURE_CLOSE against platform.ringcentral.com on Node 20.
+ */
+setDefaultExternals({
+  fetch: globalThis.fetch.bind(globalThis),
+  Request: globalThis.Request,
+  Response: globalThis.Response,
+  Headers: globalThis.Headers,
+  localStorage: new DomStorage(null, { strict: true }),
+});
 
 /** @type {import("@ringcentral/sdk").Platform | null} */
 let platform = null;
@@ -29,8 +42,9 @@ function getConfig() {
  * @returns {Promise<import("@ringcentral/sdk").Platform>}
  */
 export async function getPlatform() {
-  if (platform?.loggedIn()) {
-    return platform;
+  if (platform) {
+    const loggedIn = await Promise.resolve(platform.loggedIn());
+    if (loggedIn) return platform;
   }
 
   if (!loginPromise) {

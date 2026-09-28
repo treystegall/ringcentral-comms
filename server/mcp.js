@@ -110,50 +110,77 @@ export async function handleRequest(request) {
 }
 
 /**
- * Read MCP messages from stdin (Content-Length framed JSON-RPC).
+ * Read MCP messages from stdin.
+ * Framing: NDJSON by default (Grok Bot / fillout-style); Content-Length if the host speaks it first.
  * @param {import("node:stream").Readable} input
  * @param {(message: Record<string, unknown>) => void} onMessage
  */
 export function readMessages(input, onMessage) {
-  /** @type {Buffer[]} */
-  let bufferChunks = [];
-  let bufferLength = 0;
-  /** @type {number | null} */
-  let contentLength = null;
+  /** @type {Buffer} */
+  let stdinBuf = Buffer.alloc(0);
+  /** @type {"unknown" | "ndjson" | "content-length"} */
+  let framing = "unknown";
 
-  input.on("data", (chunk) => {
-    bufferChunks.push(chunk);
-    bufferLength += chunk.length;
-
+  function processContentLength() {
     while (true) {
-      if (contentLength === null) {
-        const headerEnd = indexOfHeaders(bufferChunks, bufferLength);
-        if (headerEnd === -1) return;
-
-        const headerStr = bufferToString(bufferChunks, 0, headerEnd);
-        const match = headerStr.match(/Content-Length:\s*(\d+)/i);
-        if (!match) {
-          throw new Error("Missing Content-Length header in MCP message");
-        }
-        contentLength = parseInt(match[1], 10);
-        consumeBytes(bufferChunks, headerEnd);
-        bufferLength -= headerEnd;
+      const headerEnd = stdinBuf.indexOf("\r\n\r\n");
+      if (headerEnd === -1) return;
+      const header = stdinBuf.subarray(0, headerEnd).toString("utf8");
+      const match = /Content-Length:\s*(\d+)/i.exec(header);
+      if (!match) {
+        stdinBuf = stdinBuf.subarray(headerEnd + 4);
+        continue;
       }
-
-      if (bufferLength < contentLength) return;
-
-      const bodyStr = bufferToString(bufferChunks, 0, contentLength);
-      consumeBytes(bufferChunks, contentLength);
-      bufferLength -= contentLength;
-      contentLength = null;
-
+      const len = parseInt(match[1], 10);
+      const start = headerEnd + 4;
+      if (stdinBuf.length < start + len) return;
+      const body = stdinBuf.subarray(start, start + len).toString("utf8");
+      stdinBuf = stdinBuf.subarray(start + len);
       try {
-        const message = JSON.parse(bodyStr);
-        onMessage(message);
+        onMessage(JSON.parse(body));
       } catch {
         process.stderr.write("Failed to parse MCP message\n");
       }
     }
+  }
+
+  function processNdjson() {
+    while (true) {
+      const nl = stdinBuf.indexOf("\n");
+      if (nl === -1) return;
+      const line = stdinBuf.subarray(0, nl).toString("utf8").replace(/\r$/, "").trim();
+      stdinBuf = stdinBuf.subarray(nl + 1);
+      if (!line) continue;
+      try {
+        onMessage(JSON.parse(line));
+      } catch {
+        process.stderr.write("Failed to parse MCP message\n");
+      }
+    }
+  }
+
+  function detectAndProcess() {
+    if (framing === "unknown") {
+      const peek = stdinBuf.toString("utf8", 0, Math.min(stdinBuf.length, 64));
+      if (/Content-Length:/i.test(peek)) {
+        framing = "content-length";
+      } else if (stdinBuf.indexOf("\n") !== -1) {
+        framing = "ndjson";
+      } else {
+        return;
+      }
+    }
+    if (framing === "content-length") processContentLength();
+    else if (framing === "ndjson") processNdjson();
+  }
+
+  // Expose framing for writeMessage
+  readMessages._getFraming = () => framing;
+
+  input.on("data", (chunk) => {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    stdinBuf = Buffer.concat([stdinBuf, buf]);
+    detectAndProcess();
   });
 }
 
@@ -162,66 +189,14 @@ export function readMessages(input, onMessage) {
  */
 export function writeMessage(response) {
   if (!response) return;
-  const body = JSON.stringify(response);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`);
-}
-
-/**
- * @param {Buffer[]} chunks
- * @param {number} length
- * @returns {number}
- */
-function indexOfHeaders(chunks, length) {
-  const marker = Buffer.from("\r\n\r\n");
-  let scanned = 0;
-  for (let i = 0; i < chunks.length && scanned < length; i++) {
-    const chunk = chunks[i];
-    const idx = chunk.indexOf(marker);
-    if (idx !== -1) {
-      return scanned + idx + marker.length;
-    }
-    scanned += chunk.length;
-  }
-  return -1;
-}
-
-/**
- * @param {Buffer[]} chunks
- * @param {number} start
- * @param {number} end
- * @returns {string}
- */
-function bufferToString(chunks, start, end) {
-  const parts = [];
-  let offset = 0;
-  for (const chunk of chunks) {
-    const chunkEnd = offset + chunk.length;
-    if (chunkEnd <= start) {
-      offset = chunkEnd;
-      continue;
-    }
-    const sliceStart = Math.max(0, start - offset);
-    const sliceEnd = Math.min(chunk.length, end - offset);
-    parts.push(chunk.subarray(sliceStart, sliceEnd));
-    offset = chunkEnd;
-    if (offset >= end) break;
-  }
-  return Buffer.concat(parts).toString("utf8");
-}
-
-/**
- * @param {Buffer[]} chunks
- * @param {number} count
- */
-function consumeBytes(chunks, count) {
-  while (count > 0 && chunks.length > 0) {
-    const first = chunks[0];
-    if (first.length <= count) {
-      count -= first.length;
-      chunks.shift();
-    } else {
-      chunks[0] = first.subarray(count);
-      count = 0;
-    }
+  const json = JSON.stringify(response);
+  const framing =
+    typeof readMessages._getFraming === "function" ? readMessages._getFraming() : "ndjson";
+  if (framing === "content-length") {
+    const body = Buffer.from(json, "utf8");
+    process.stdout.write(`Content-Length: ${body.length}\r\n\r\n`);
+    process.stdout.write(body);
+  } else {
+    process.stdout.write(json + "\n");
   }
 }

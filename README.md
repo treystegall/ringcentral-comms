@@ -18,7 +18,9 @@ Agent Plugin that wraps the RingCentral REST API for sending, receiving, and mon
 
 ### 2. Configure plugin variables
 
-Set these in your Agent Plugin / Cursor MCP configuration (never commit real values):
+In Cursor, JWT and API credentials are defined in `.cursor-plugin/plugin.json` under the `variables` JSON Schema. Set values in your Cursor plugin configuration (never commit real secrets):
+
+Also available as MCP env placeholders in `mcp.json`:
 
 | Variable | Description |
 |----------|-------------|
@@ -113,7 +115,8 @@ PhoneNumber  = { id, e164, usageType, features }
 ## Plugin layout
 
 ```
-plugin.json          # Agent Plugin manifest
+plugin.json          # Agent Plugin manifest (Agent Plugins 1.0.0)
+.cursor-plugin/plugin.json  # Cursor plugin variables (JWT credentials)
 mcp.json             # MCP server configuration
 skills/              # Agent skill for tool selection guidance
 server/              # Node.js stdio MCP server

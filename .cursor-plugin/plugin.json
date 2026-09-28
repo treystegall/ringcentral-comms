@@ -1,0 +1,36 @@
+{
+  "name": "ringcentral-comms",
+  "description": "Send, receive, and monitor RingCentral SMS and phone calls",
+  "version": "0.1.0",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "RINGCENTRAL_CLIENT_ID": {
+        "type": "string",
+        "title": "RingCentral Client ID",
+        "description": "App Client ID from the RingCentral Developer Portal"
+      },
+      "RINGCENTRAL_CLIENT_SECRET": {
+        "type": "string",
+        "title": "RingCentral Client Secret",
+        "description": "App Client Secret from the RingCentral Developer Portal"
+      },
+      "RINGCENTRAL_JWT": {
+        "type": "string",
+        "title": "RingCentral JWT",
+        "description": "JWT credential for server-side authentication"
+      },
+      "RINGCENTRAL_SERVER_URL": {
+        "type": "string",
+        "title": "RingCentral Server URL",
+        "description": "API server URL",
+        "default": "https://platform.ringcentral.com"
+      }
+    },
+    "required": [
+      "RINGCENTRAL_CLIENT_ID",
+      "RINGCENTRAL_CLIENT_SECRET",
+      "RINGCENTRAL_JWT"
+    ]
+  }
+}

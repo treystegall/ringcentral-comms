@@ -1,4 +1,4 @@
-import SDK from "@ringcentral/sdk";
+import { SDK } from "@ringcentral/sdk";
 
 /** @type {import("@ringcentral/sdk").Platform | null} */
 let platform = null;

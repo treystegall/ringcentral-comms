@@ -1,0 +1,16 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "ringcentral-comms": {
+      "command": "node",
+      "args": ["server/index.js"],
+      "cwd": "${PLUGIN_ROOT}",
+      "env": {
+        "RINGCENTRAL_CLIENT_ID": "${RINGCENTRAL_CLIENT_ID}",
+        "RINGCENTRAL_CLIENT_SECRET": "${RINGCENTRAL_CLIENT_SECRET}",
+        "RINGCENTRAL_JWT": "${RINGCENTRAL_JWT}",
+        "RINGCENTRAL_SERVER_URL": "${RINGCENTRAL_SERVER_URL}"
+      }
+    }
+  }
+}
